@@ -1,6 +1,6 @@
 # OpenBao 관리 프로젝트
 
-OpenBao 시크릿 관리를 위한 정책, 스크립트, API 컬렉션 및 문서 저장소입니다.
+OpenBao CLI를 사용한 시크릿 관리 프로젝트입니다. 팀원들이 빠르게 랜딩하여 Harbor 시크릿과 Staging/Production 환경 시크릿을 관리할 수 있도록 돕습니다.
 
 ## 📋 프로젝트 구조
 
@@ -8,77 +8,156 @@ OpenBao 시크릿 관리를 위한 정책, 스크립트, API 컬렉션 및 문�
 prj-openbao/
 ├── 📚 문서
 │   ├── INDEX.md                           # 전체 문서 인덱스
-│   ├── QUICKSTART.md                      # ESC 3단계 설정
+│   ├── QUICKSTART.md                      # CLI 빠른 시작 (3단계)
 │   ├── INSTALL-CLI.md                     # Vault CLI 빠른 설치
 │   ├── EXTERNAL-ACCESS-QUICKSTART.md      # 외부 접근 가이드
+│   ├── KUBERNETES.md                      # Kubernetes 통합 (선택)
 │   └── docs/
 │       ├── vault-cli-installation.md      # CLI 상세 설치
 │       └── external-access.md             # 외부 접근 상세
 │
 ├── 🔐 정책 및 스크립트
 │   ├── policies/
-│   │   └── esc-policy.hcl                # ESC 읽기 전용 정책
+│   │   └── esc-policy.hcl                # 읽기 전용 정책
 │   └── scripts/
 │       ├── install-vault-cli.sh          # CLI 자동 설치
-│       ├── setup-esc.sh                  # ESC 설정 자동화
+│       ├── setup-esc.sh                  # 정책/토큰 자동 생성
 │       └── create-secrets.sh             # 시크릿 생성 헬퍼
-│
-└── 🎨 API 컬렉션
-    └── bruno/
-        ├── environments/                  # 환경 설정
-        └── OpenBao/                       # 9개 API 요청
 ```
 
-## 🚀 빠른 시작
+## 🚀 빠른 시작 (5분)
 
 ### 1. Vault CLI 설치
 ```bash
 ./scripts/install-vault-cli.sh
 ```
 
-### 2. OpenBao 연결
+### 2. OpenBao 연결 및 로그인
 ```bash
 export VAULT_ADDR=https://openbao.cocdev.co.kr
 vault status
 vault login
 ```
 
-### 3. 문서 참고
+### 3. 시크릿 읽기
+```bash
+# Staging 환경 시크릿 조회
+vault kv get secret/server/staging
+
+# Production 환경 시크릿 조회
+vault kv get secret/server/production
+
+# Harbor 시크릿 조회
+vault kv get secret/harbor/staging
+```
+
+### 4. 자세한 가이드
 - **CLI 설치**: [INSTALL-CLI.md](INSTALL-CLI.md)
 - **외부 접근**: [EXTERNAL-ACCESS-QUICKSTART.md](EXTERNAL-ACCESS-QUICKSTART.md)
-- **ESC 설정**: [QUICKSTART.md](QUICKSTART.md)
+- **빠른 시작**: [QUICKSTART.md](QUICKSTART.md)
 - **전체 문서**: [INDEX.md](INDEX.md)
 
 ---
 
-## ESC (External Secrets Controller) 설정
+## 🔑 주요 CLI 명령어
 
-### 개요
-External Secrets Operator가 OpenBao의 시크릿을 읽을 수 있도록 정책과 토큰을 설정합니다.
-
-### 사전 요구사항
-- OpenBao가 실행 중이어야 함
-- Root 또는 관리자 권한의 토큰으로 로그인되어 있어야 함
-- `vault` CLI 도구 설치 → [설치 가이드](docs/vault-cli-installation.md)
-
-### 빠른 시작
+### 연결 및 인증
 
 ```bash
-# 1. OpenBao에 로그인
-export VAULT_ADDR=http://your-openbao-address:8200
+# 서버 상태 확인
+vault status
+
+# 로그인
 vault login
 
-# 2. 설정 스크립트 실행
-cd /Users/wallykim/dev/prj-openbao
-chmod +x scripts/setup-esc.sh
-./scripts/setup-esc.sh
-
-# 3. 출력된 토큰을 복사하여 Kubernetes Secret 생성
+# 토큰 정보 확인
+vault token lookup
 ```
 
-### 수동 설정
+### 시크릿 조회
 
-#### 1. 정책 생성
+```bash
+# 시크릿 목록 보기
+vault kv list secret/server
+vault kv list secret/harbor
+
+# 특정 시크릿 읽기
+vault kv get secret/server/staging/config
+vault kv get secret/server/production/config
+vault kv get secret/harbor/staging/auth
+vault kv get secret/harbor/production/auth
+
+# JSON 형식으로 출력
+vault kv get -format=json secret/server/staging
+```
+
+### 시크릿 생성/수정
+
+```bash
+# 새 시크릿 생성
+vault kv put secret/server/staging/config \
+  APP_PORT=3000 \
+  APP_NAME=plate-api \
+  NODE_ENV=staging
+
+# 기존 시크릿에 키 추가 (merge)
+vault kv patch secret/server/staging/config \
+  NEW_KEY=new_value
+
+# 전체 시크릿 덮어쓰기
+vault kv put secret/server/staging/config \
+  APP_PORT=3001 \
+  APP_NAME=plate-api-v2
+```
+
+### 시크릿 삭제
+
+```bash
+# 최신 버전 삭제 (soft delete)
+vault kv delete secret/server/staging/config
+
+# 특정 버전 삭제
+vault kv delete -versions=2,3 secret/server/staging/config
+
+# 완전 삭제 (복구 불가)
+vault kv destroy -versions=1,2 secret/server/staging/config
+
+# 메타데이터 포함 완전 삭제
+vault kv metadata delete secret/server/staging/config
+```
+
+### 버전 관리
+
+```bash
+# 시크릿 변경 이력 보기
+vault kv metadata get secret/server/staging/config
+
+# 특정 버전 읽기
+vault kv get -version=2 secret/server/staging/config
+
+# 이전 버전으로 복구
+vault kv rollback -version=1 secret/server/staging/config
+```
+
+---
+
+## 📁 관리되는 시크릿 경로
+
+### 서버 환경 변수
+- `secret/server/staging` - Staging 환경 설정
+- `secret/server/production` - Production 환경 설정
+- `secret/server/default` - 기본 환경 설정
+
+### Harbor Registry 인증
+- `secret/harbor/staging` - Staging Harbor 인증
+- `secret/harbor/production` - Production Harbor 인증
+- `secret/harbor/development` - Development Harbor 인증
+
+---
+
+## 🔐 정책 및 토큰 관리
+
+### 정책 생성 (관리자용)
 
 ```bash
 # 정책 파일 적용
@@ -86,224 +165,146 @@ vault policy write esc-policy policies/esc-policy.hcl
 
 # 정책 확인
 vault policy read esc-policy
+
+# 정책 목록
+vault policy list
 ```
 
-#### 2. 토큰 생성
+### 토큰 생성 (관리자용)
 
 ```bash
-# 기본 토큰 (30일, 자동 갱신)
+# 자동 생성 스크립트 사용 (권장)
+./scripts/setup-esc.sh
+
+# 수동 생성 - 기본 토큰 (30일, 자동 갱신)
 vault token create \
   -policy=esc-policy \
   -ttl=720h \
   -period=24h \
   -renewable=true \
-  -display-name=esc-token
-
-# 무제한 TTL 토큰 (프로덕션 비권장)
-vault token create \
-  -policy=esc-policy \
-  -no-default-policy \
-  -period=24h \
-  -display-name=esc-token-prod
-```
-
-#### 3. Kubernetes Secret 생성
-
-**Staging 환경:**
-```bash
-kubectl create secret generic openbao-token \
-  --from-literal=token=<생성된_토큰> \
-  --namespace=external-secrets-stg
-```
-
-**Production 환경:**
-```bash
-kubectl create secret generic openbao-token \
-  --from-literal=token=<생성된_토큰> \
-  --namespace=external-secrets-prod
-```
-
-### 현재 정책이 허용하는 경로
-
-ESC 정책은 다음 OpenBao 경로에 대한 읽기 권한을 부여합니다:
-
-**서버 환경 변수**:
-- `secret/data/server/staging`
-- `secret/data/server/production`
-- `secret/data/server/default`
-
-**Harbor Registry 인증**:
-- `secret/data/harbor/staging`
-- `secret/data/harbor/production`
-- `secret/data/harbor/development`
-
-### OpenBao에 시크릿 생성
-
-정책 적용 후, 실제 시크릿을 OpenBao에 생성해야 합니다:
-
-```bash
-# 1. Staging 서버 환경 변수 생성
-vault kv put secret/server/staging \
-  APP_PORT=3000 \
-  APP_NAME=plate-api \
-  APP_ADMIN_EMAIL=admin@example.com \
-  API_PREFIX=/api \
-  APP_FALLBACK_LANGUAGE=ko \
-  APP_HEADER_LANGUAGE=x-custom-lang \
-  FRONTEND_DOMAIN=https://staging.example.com \
-  BACKEND_DOMAIN=https://api-staging.example.com \
-  NODE_ENV=staging \
-  AWS_ACCESS_KEY_ID=your-key \
-  AWS_SECRET_ACCESS_KEY=your-secret \
-  AWS_REGION=ap-northeast-2 \
-  AWS_S3_BUCKET_NAME=your-bucket \
-  SMTP_HOST=smtp.example.com \
-  SMTP_PORT=587 \
-  SMTP_USERNAME=user \
-  SMTP_PASSWORD=pass \
-  SMTP_SENDER=noreply@example.com \
-  AUTH_JWT_SECRET=your-jwt-secret \
-  AUTH_JWT_TOKEN_EXPIRES_IN=3600 \
-  AUTH_JWT_TOKEN_REFRESH_IN=86400 \
-  AUTH_JWT_SALT_ROUNDS=10 \
-  CORS_ENABLED=true \
-  DATABASE_URL=postgresql://user:pass@host:5432/db \
-  DIRECT_URL=postgresql://user:pass@host:5432/db
-
-# 2. Production 서버 환경 변수 생성
-vault kv put secret/server/production \
-  APP_PORT=3000 \
-  APP_NAME=plate-api \
-  # ... (production 값들)
-
-# 3. Staging Harbor 인증 생성
-vault kv put secret/harbor/staging \
-  .dockerconfigjson='{"auths":{"harbor.cocdev.co.kr":{"username":"robot$staging","password":"your-token","auth":"base64-encoded"}}}'
-
-# 4. Production Harbor 인증 생성
-vault kv put secret/harbor/production \
-  .dockerconfigjson='{"auths":{"harbor.cocdev.co.kr":{"username":"robot$production","password":"your-token","auth":"base64-encoded"}}}'
-```
-
-### 정책 커스터마이징
-
-`policies/esc-policy.hcl` 파일을 수정하여 접근 경로를 추가/제거할 수 있습니다:
-
-```hcl
-# 새로운 애플리케이션별 경로 추가 (현재는 주석 처리됨)
-path "secret/data/plate-api/*" {
-  capabilities = ["read", "list"]
-}
-
-path "secret/metadata/plate-api/*" {
-  capabilities = ["read", "list"]
-}
-```
-
-수정 후 정책 재적용:
-```bash
-vault policy write esc-policy policies/esc-policy.hcl
+  -display-name=team-token
 ```
 
 ### 토큰 관리
 
-#### 토큰 정보 확인
 ```bash
+# 토큰 정보 확인
+vault token lookup
+
+# 다른 토큰 정보 확인
 vault token lookup <token>
-```
 
-#### 토큰 갱신
-```bash
-vault token renew <token>
-```
+# 토큰 갱신
+vault token renew
 
-#### 토큰 폐기
-```bash
+# 토큰 폐기
 vault token revoke <token>
 ```
 
-#### 모든 ESC 토큰 조회
+---
+
+## 🔨 시크릿 생성 예제
+
+### Harbor 시크릿 생성
+
 ```bash
-vault list auth/token/accessors
-vault token lookup -accessor <accessor_id>
+# Docker config JSON 형식으로 생성
+vault kv put secret/harbor/staging \
+  .dockerconfigjson='{"auths":{"harbor.cocdev.co.kr":{"username":"robot$staging","password":"your-token","auth":"base64-encoded"}}}'
+
+vault kv put secret/harbor/production \
+  .dockerconfigjson='{"auths":{"harbor.cocdev.co.kr":{"username":"robot$production","password":"your-token","auth":"base64-encoded"}}}'
 ```
 
-### 보안 권장사항
+### 서버 환경 변수 생성
+
+```bash
+# Staging 환경
+vault kv put secret/server/staging \
+  APP_PORT=3000 \
+  APP_NAME=plate-api \
+  APP_ADMIN_EMAIL=admin@example.com \
+  NODE_ENV=staging \
+  DATABASE_URL=postgresql://user:pass@host:5432/db \
+  AWS_ACCESS_KEY_ID=your-key \
+  AWS_SECRET_ACCESS_KEY=your-secret \
+  AWS_REGION=ap-northeast-2
+
+# Production 환경
+vault kv put secret/server/production \
+  APP_PORT=3000 \
+  APP_NAME=plate-api \
+  NODE_ENV=production \
+  DATABASE_URL=postgresql://user:pass@prod-host:5432/db
+```
+
+### 헬퍼 스크립트 사용
+
+```bash
+# 대화형 시크릿 생성 도구
+./scripts/create-secrets.sh
+```
+
+---
+
+## 🛠️ 트러블슈팅
+
+### "permission denied" 오류
+```bash
+# 현재 토큰의 정책 확인
+vault token lookup | grep policies
+
+# 정책이 허용하는 경로 확인
+vault policy read esc-policy
+```
+
+### 연결 오류
+```bash
+# VAULT_ADDR 환경 변수 확인
+echo $VAULT_ADDR
+
+# 서버 상태 확인
+vault status
+
+# 네트워크 연결 테스트
+curl $VAULT_ADDR/v1/sys/health
+```
+
+### 토큰 만료
+```bash
+# 토큰 TTL 확인
+vault token lookup | grep ttl
+
+# 토큰 갱신
+vault token renew
+```
+
+### 시크릿 없음
+```bash
+# 경로 존재 확인
+vault kv list secret/server
+
+# 메타데이터 확인
+vault kv metadata get secret/server/staging
+```
+
+---
+
+## 📚 추가 문서
+
+- **상세 CLI 설치 가이드**: [docs/vault-cli-installation.md](docs/vault-cli-installation.md)
+- **외부 접근 방법**: [docs/external-access.md](docs/external-access.md)
+- **Kubernetes 통합** (선택): [KUBERNETES.md](KUBERNETES.md)
+- **전체 문서 인덱스**: [INDEX.md](INDEX.md)
+
+## 🔒 보안 권장사항
 
 1. **최소 권한 원칙**: 필요한 경로만 정책에 포함
-2. **토큰 주기 관리**:
-   - `period` 설정으로 자동 갱신 활성화
-   - 정기적인 토큰 교체 (3-6개월)
-3. **토큰 저장**:
-   - Kubernetes Secret에만 저장
-   - Git에 커밋하지 않음 (.gitignore 확인)
-4. **감사 로그**: OpenBao 감사 로그 활성화
-   ```bash
-   vault audit enable file file_path=/var/log/vault/audit.log
-   ```
+2. **토큰 주기 관리**: 정기적인 토큰 교체 (3-6개월)
+3. **토큰 저장**: Git에 절대 커밋하지 않음 (.gitignore 확인)
+4. **로컬 환경**: 개발용 토큰과 프로덕션 토큰 분리
 
-### 트러블슈팅
+## 📖 참고 자료
 
-#### "permission denied" 오류
-- 정책에 해당 경로가 포함되어 있는지 확인
-- 토큰이 올바른 정책과 연결되어 있는지 확인
-  ```bash
-  vault token lookup | grep policies
-  ```
-
-#### 토큰 만료
-- `period` 설정이 있다면 자동 갱신되어야 함
-- ESC가 자동으로 갱신하도록 설정되어 있는지 확인
-
-#### 경로 접근 불가
-```bash
-# 토큰으로 직접 테스트
-VAULT_TOKEN=<esc_token> vault kv get secret/app/test
-```
-
-### SecretStore 설정 예시
-
-**ClusterSecretStore (권장):**
-```yaml
-apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: openbao-backend
-spec:
-  provider:
-    vault:
-      server: "http://openbao.openbao-system.svc.cluster.local:8200"
-      path: "secret"
-      version: "v2"
-      auth:
-        tokenSecretRef:
-          name: "openbao-token"
-          namespace: "external-secrets-stg"
-          key: "token"
-```
-
-**ExternalSecret 예시:**
-```yaml
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: plate-api-secrets
-  namespace: plate-api-stg
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: openbao-backend
-    kind: ClusterSecretStore
-  target:
-    name: plate-api-secrets
-    creationPolicy: Owner
-  data:
-  - secretKey: DATABASE_URL
-    remoteRef:
-      key: secret/plate-api/database
-      property: url
-```
-
-### 참고 자료
 - [OpenBao Documentation](https://openbao.org/docs/)
-- [External Secrets Operator - Vault Provider](https://external-secrets.io/latest/provider/hashicorp-vault/)
+- [Vault CLI Commands](https://developer.hashicorp.com/vault/docs/commands)

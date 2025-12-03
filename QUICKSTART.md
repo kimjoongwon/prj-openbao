@@ -1,210 +1,344 @@
-# OpenBao ESC 빠른 시작 가이드
+# OpenBao CLI 빠른 시작 가이드
 
-## 🚀 3단계로 ESC 설정하기
+## 🚀 3단계로 시작하기 (5분)
 
-### 1단계: 정책 및 토큰 생성
+### 1단계: CLI 설치 및 연결
 
 ```bash
-# OpenBao 로그인
+# CLI 자동 설치 (macOS/Linux)
+./scripts/install-vault-cli.sh
+
+# OpenBao 서버 연결
 export VAULT_ADDR=https://openbao.cocdev.co.kr
+
+# 서버 상태 확인
+vault status
+
+# 로그인
 vault login
-
-# 자동 설정 스크립트 실행
-cd /Users/wallykim/dev/prj-openbao
-chmod +x scripts/setup-esc.sh
-./scripts/setup-esc.sh
 ```
 
-**출력된 토큰을 저장하세요!**
-
-### 2단계: OpenBao에 시크릿 생성
+### 2단계: 시크릿 조회
 
 ```bash
-# Staging 시크릿 생성
-chmod +x scripts/create-secrets.sh
-./scripts/create-secrets.sh staging
+# 서버 환경 시크릿 목록
+vault kv list secret/server
 
-# Production 시크릿 생성
-./scripts/create-secrets.sh production
-```
-
-### 3단계: Kubernetes Secret 생성
-
-```bash
-# 1단계에서 받은 토큰 사용
-OPENBAO_TOKEN="<1단계에서_생성된_토큰>"
-
-# Staging 환경
-kubectl create secret generic openbao-token \
-  --from-literal=token=$OPENBAO_TOKEN \
-  --namespace=plate-stg \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-# Production 환경
-kubectl create secret generic openbao-token \
-  --from-literal=token=$OPENBAO_TOKEN \
-  --namespace=plate-prod \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
-
-## 📋 현재 설정 확인
-
-### OpenBao 정책 확인
-```bash
-vault policy read esc-policy
-```
-
-### 토큰 정보 확인
-```bash
-vault token lookup <토큰>
-```
-
-### 시크릿 확인
-```bash
-# 서버 시크릿
+# Staging 환경 시크릿 읽기
 vault kv get secret/server/staging
+
+# Production 환경 시크릿 읽기
 vault kv get secret/server/production
 
-# Harbor 시크릿
+# Harbor 시크릿 조회
 vault kv get secret/harbor/staging
 vault kv get secret/harbor/production
 ```
 
-## 🔧 Helm 차트 배포
+### 3단계: 시크릿 생성 (관리자용)
 
-### Staging
 ```bash
-helm upgrade --install openbao-secrets-manager \
-  ./helm/shared-configs/openbao-secrets-manager \
-  -f ./helm/shared-configs/openbao-secrets-manager/values-staging.yaml \
-  --namespace plate-stg \
-  --create-namespace
+# 헬퍼 스크립트 사용 (대화형)
+./scripts/create-secrets.sh
+
+# 또는 수동 생성
+vault kv put secret/server/staging \
+  APP_PORT=3000 \
+  APP_NAME=plate-api \
+  NODE_ENV=staging \
+  DATABASE_URL=postgresql://user:pass@host:5432/db
 ```
 
-### Production
+---
+
+## 📋 자주 사용하는 명령어
+
+### 시크릿 조회
 ```bash
-helm upgrade --install openbao-secrets-manager \
-  ./helm/shared-configs/openbao-secrets-manager \
-  -f ./helm/shared-configs/openbao-secrets-manager/values-production.yaml \
-  --namespace plate-prod \
-  --create-namespace
+# 목록 보기
+vault kv list secret/server
+vault kv list secret/harbor
+
+# 특정 시크릿 읽기
+vault kv get secret/server/staging
+vault kv get secret/harbor/production
+
+# JSON 형식으로 출력
+vault kv get -format=json secret/server/staging
+
+# 특정 필드만 추출
+vault kv get -field=APP_PORT secret/server/staging
 ```
 
-## 🧪 동작 확인
-
-### SecretStore 확인
+### 시크릿 생성/수정
 ```bash
-kubectl get secretstore -n plate-stg
-kubectl get secretstore -n plate-prod
+# 새 시크릿 생성
+vault kv put secret/server/default \
+  APP_PORT=3000 \
+  APP_NAME=my-app
+
+# 기존 시크릿에 키 추가 (merge)
+vault kv patch secret/server/staging \
+  NEW_KEY=new_value
+
+# 전체 덮어쓰기
+vault kv put secret/server/staging \
+  APP_PORT=3001 \
+  APP_NAME=updated-app
 ```
 
-### ExternalSecret 확인
+### 시크릿 삭제
 ```bash
-kubectl get externalsecret -n plate-stg
-kubectl get externalsecret -n plate-prod
+# 최신 버전 삭제 (soft delete, 복구 가능)
+vault kv delete secret/server/staging
+
+# 완전 삭제 (복구 불가)
+vault kv destroy -versions=1 secret/server/staging
+
+# 메타데이터 포함 완전 삭제
+vault kv metadata delete secret/server/staging
 ```
 
-### 생성된 Secret 확인
+### 버전 관리
 ```bash
-kubectl get secret app-env-secrets -n plate-stg
-kubectl get secret harbor-docker-secret -n plate-stg
+# 변경 이력 보기
+vault kv metadata get secret/server/staging
 
-kubectl get secret app-env-secrets -n plate-prod
-kubectl get secret harbor-docker-secret -n plate-prod
+# 특정 버전 읽기
+vault kv get -version=2 secret/server/staging
+
+# 이전 버전으로 롤백
+vault kv rollback -version=1 secret/server/staging
 ```
 
-### 상세 확인 (디버깅)
+---
+
+## 🔐 정책 및 토큰 관리 (관리자용)
+
+### 정책 생성
 ```bash
-# ExternalSecret 상태 확인
-kubectl describe externalsecret app-env-secrets-staging -n plate-stg
+# 자동 설정 스크립트 사용 (권장)
+cd /Users/wallykim/dev/prj-openbao
+chmod +x scripts/setup-esc.sh
+./scripts/setup-esc.sh
 
-# SecretStore 상태 확인
-kubectl describe secretstore openbao-env-staging -n plate-stg
-
-# Secret 내용 확인 (base64 디코딩)
-kubectl get secret app-env-secrets -n plate-stg -o jsonpath='{.data.APP_NAME}' | base64 -d
+# 수동 설정
+vault policy write esc-policy policies/esc-policy.hcl
+vault policy read esc-policy
 ```
 
-## 🔄 시크릿 업데이트
-
-### OpenBao 시크릿 수정
+### 토큰 관리
 ```bash
-# 전체 업데이트
+# 현재 토큰 정보 확인
+vault token lookup
+
+# 다른 토큰 정보 확인
+vault token lookup <token>
+
+# 토큰 갱신
+vault token renew
+
+# 토큰 폐기
+vault token revoke <token>
+
+# 새 토큰 생성
+vault token create \
+  -policy=esc-policy \
+  -ttl=720h \
+  -period=24h \
+  -display-name=team-member-token
+```
+
+---
+
+## 🔨 시크릿 생성 예제
+
+### Harbor Docker Registry 인증
+
+```bash
+# Staging Harbor 시크릿
+vault kv put secret/harbor/staging \
+  .dockerconfigjson='{"auths":{"harbor.cocdev.co.kr":{"username":"robot$staging","password":"your-token","auth":"base64-encoded"}}}'
+
+# Production Harbor 시크릿
+vault kv put secret/harbor/production \
+  .dockerconfigjson='{"auths":{"harbor.cocdev.co.kr":{"username":"robot$production","password":"your-token","auth":"base64-encoded"}}}'
+```
+
+### 서버 환경 변수
+
+```bash
+# Staging 환경
+vault kv put secret/server/staging \
+  APP_PORT=3000 \
+  APP_NAME=plate-api \
+  APP_ADMIN_EMAIL=admin@example.com \
+  API_PREFIX=/api \
+  APP_FALLBACK_LANGUAGE=ko \
+  FRONTEND_DOMAIN=https://staging.example.com \
+  BACKEND_DOMAIN=https://api-staging.example.com \
+  NODE_ENV=staging \
+  DATABASE_URL=postgresql://user:pass@staging-db:5432/db \
+  AWS_ACCESS_KEY_ID=your-staging-key \
+  AWS_SECRET_ACCESS_KEY=your-staging-secret \
+  AWS_REGION=ap-northeast-2 \
+  SMTP_HOST=smtp.example.com \
+  SMTP_PORT=587 \
+  AUTH_JWT_SECRET=staging-jwt-secret
+
+# Production 환경
+vault kv put secret/server/production \
+  APP_PORT=3000 \
+  APP_NAME=plate-api \
+  NODE_ENV=production \
+  DATABASE_URL=postgresql://user:pass@prod-db:5432/db \
+  # ... production 값들
+```
+
+---
+
+## 🔄 시크릿 업데이트 워크플로우
+
+### 전체 업데이트
+```bash
+# 1. 현재 값 확인
+vault kv get secret/server/staging
+
+# 2. 새 값으로 덮어쓰기
 vault kv put secret/server/staging \
   APP_PORT=3000 \
   APP_NAME=new-value \
-  ...
+  # ... 모든 키-값 쌍
 
-# 부분 업데이트 (patch)
-vault kv patch secret/server/staging \
-  APP_NAME=new-value \
-  DATABASE_URL=new-db-url
+# 3. 업데이트 확인
+vault kv get secret/server/staging
 ```
 
-### 강제 동기화 (대기 시간 없이)
+### 부분 업데이트
 ```bash
-# ExternalSecret 삭제 후 재생성 (자동으로 다시 생성됨)
-kubectl delete externalsecret app-env-secrets-staging -n plate-stg
+# 특정 키만 업데이트 (다른 키는 유지)
+vault kv patch secret/server/staging \
+  APP_NAME=updated-value \
+  DATABASE_URL=new-db-url
 
-# 또는 annotation 추가로 강제 갱신
-kubectl annotate externalsecret app-env-secrets-staging \
-  force-sync="$(date +%s)" \
-  -n plate-stg
+# 확인
+vault kv get secret/server/staging
 ```
+
+### 실수한 경우 롤백
+```bash
+# 변경 이력 확인
+vault kv metadata get secret/server/staging
+
+# 이전 버전으로 복구
+vault kv rollback -version=1 secret/server/staging
+```
+
+---
 
 ## 🚨 문제 해결
 
 ### "permission denied" 오류
 ```bash
-# 토큰 정책 확인
+# 1. 현재 토큰의 정책 확인
 vault token lookup | grep policies
 
-# 정책 재적용
-vault policy write esc-policy openbao/policies/esc-policy.hcl
+# 2. 정책 내용 확인
+vault policy read esc-policy
+
+# 3. 필요시 정책 재적용
+vault policy write esc-policy policies/esc-policy.hcl
 ```
 
-### ExternalSecret이 동기화되지 않음
+### 연결 오류
 ```bash
-# 로그 확인
-kubectl logs -n external-secrets deployment/external-secrets -f
+# 1. 환경 변수 확인
+echo $VAULT_ADDR
 
-# SecretStore 연결 테스트
-kubectl get secretstore -n plate-stg -o yaml
+# 2. 서버 상태 확인
+vault status
 
-# OpenBao 토큰 확인
-kubectl get secret openbao-token -n plate-stg -o jsonpath='{.data.token}' | base64 -d
+# 3. 네트워크 연결 테스트
+curl $VAULT_ADDR/v1/sys/health
+```
+
+### 토큰 만료
+```bash
+# 1. 토큰 TTL 확인
+vault token lookup | grep ttl
+
+# 2. 토큰 갱신
+vault token renew
+
+# 3. 새 토큰 생성 (만료된 경우)
+vault login
 ```
 
 ### 시크릿이 없음
 ```bash
-# OpenBao에 시크릿이 존재하는지 확인
-vault kv list secret/server/
-vault kv get secret/server/staging
+# 1. 경로 확인
+vault kv list secret/server
 
-# 없다면 생성
+# 2. 메타데이터 확인
+vault kv metadata get secret/server/staging
+
+# 3. 시크릿 생성
 ./scripts/create-secrets.sh staging
 ```
 
-## 📚 추가 정보
+### 삭제한 시크릿 복구
+```bash
+# 1. 삭제 이력 확인
+vault kv metadata get secret/server/staging
 
-- 상세 가이드: [README.md](README.md)
-- 정책 파일: [policies/esc-policy.hcl](policies/esc-policy.hcl)
-- 설정 스크립트: [scripts/setup-esc.sh](scripts/setup-esc.sh)
-- 시크릿 생성: [scripts/create-secrets.sh](scripts/create-secrets.sh)
+# 2. 삭제 취소 (soft delete된 경우)
+vault kv undelete -versions=1 secret/server/staging
+
+# 3. 이전 버전으로 롤백
+vault kv rollback -version=1 secret/server/staging
+```
+
+---
+
+## 📚 추가 문서
+
+- **상세 가이드**: [README.md](README.md)
+- **CLI 설치**: [INSTALL-CLI.md](INSTALL-CLI.md)
+- **외부 접근**: [EXTERNAL-ACCESS-QUICKSTART.md](EXTERNAL-ACCESS-QUICKSTART.md)
+- **전체 문서**: [INDEX.md](INDEX.md)
+- **Kubernetes 통합** (선택): [KUBERNETES.md](KUBERNETES.md)
 
 ## 🔐 보안 체크리스트
 
-- [ ] ESC 토큰은 읽기 전용 권한만 보유
-- [ ] 토큰이 Git에 커밋되지 않음
-- [ ] Production과 Staging 토큰이 분리됨 (권장)
+- [ ] 토큰이 Git에 커밋되지 않음 (.gitignore 확인)
+- [ ] Production과 Staging 토큰 분리 (권장)
 - [ ] 정기적인 토큰 교체 일정 수립 (3-6개월)
-- [ ] OpenBao 감사 로그 활성화
-- [ ] Kubernetes Secret은 암호화됨 (etcd encryption)
+- [ ] 최소 권한 원칙 적용 (필요한 경로만 접근)
+- [ ] 민감한 시크릿은 안전한 채널로만 공유
 
-## 📞 지원
+## 💡 팁
 
-문제가 발생하면 다음을 확인하세요:
-1. OpenBao 로그
-2. External Secrets Operator 로그
-3. Kubernetes 이벤트
-4. 이 가이드의 문제 해결 섹션
+### 환경 변수 설정 저장
+```bash
+# ~/.zshrc 또는 ~/.bashrc에 추가
+export VAULT_ADDR=https://openbao.cocdev.co.kr
+export VAULT_TOKEN=your-token  # 주의: 개발 환경에서만 사용
+```
+
+### JSON 출력 활용
+```bash
+# jq와 함께 사용
+vault kv get -format=json secret/server/staging | jq '.data.data'
+
+# 특정 필드 추출
+vault kv get -format=json secret/server/staging | jq -r '.data.data.APP_PORT'
+```
+
+### 자동화 스크립트
+```bash
+# 여러 환경의 같은 키 비교
+for env in staging production; do
+  echo "$env APP_PORT:"
+  vault kv get -field=APP_PORT secret/server/$env
+done
+```
