@@ -1,0 +1,37 @@
+meta {
+  name: Health Check
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/v1/sys/health
+}
+
+docs {
+  # Health Check
+
+  OpenBao 서버의 상태를 확인합니다.
+
+  ## 응답 코드
+  - 200: 초기화되고 unsealed 상태
+  - 429: unsealed이지만 standby 모드
+  - 472: 재해 복구 모드
+  - 473: 성능 standby 모드
+  - 501: 초기화되지 않음
+  - 503: sealed 상태
+}
+
+script:post-response {
+  console.log('Status:', res.status);
+  console.log('Initialized:', res.body.initialized);
+  console.log('Sealed:', res.body.sealed);
+
+  if (res.status === 200) {
+    console.log('✅ OpenBao is healthy');
+  } else if (res.status === 503) {
+    console.log('🔒 OpenBao is sealed');
+  } else if (res.status === 501) {
+    console.log('⚠️  OpenBao is not initialized');
+  }
+}

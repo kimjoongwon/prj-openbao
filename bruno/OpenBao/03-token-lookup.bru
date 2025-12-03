@@ -1,0 +1,37 @@
+meta {
+  name: Token Lookup (Self)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/v1/auth/token/lookup-self
+}
+
+headers {
+  X-Vault-Token: {{token}}
+}
+
+docs {
+  # Token Lookup
+
+  현재 토큰의 상세 정보를 조회합니다.
+
+  ## 확인 항목
+  - 토큰 정책 (policies)
+  - 만료 시간 (ttl)
+  - 토큰 타입 (type)
+  - 엔티티 ID (entity_id)
+}
+
+script:post-response {
+  if (res.status === 200) {
+    console.log('✅ 토큰 정보 조회 성공');
+    console.log('Display Name:', res.body.data.display_name);
+    console.log('Policies:', res.body.data.policies);
+    console.log('TTL:', res.body.data.ttl, 'seconds');
+    console.log('Renewable:', res.body.data.renewable);
+  } else {
+    console.log('❌ 토큰 조회 실패');
+  }
+}

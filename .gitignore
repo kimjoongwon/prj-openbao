@@ -1,0 +1,60 @@
+# OpenBao Project .gitignore
+
+# Vault tokens and secrets
+.vault-token
+*.token
+secrets/
+
+# Bruno secrets
+bruno/**/*.bru.secrets
+*.bru.secrets
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Backup files
+*.bak
+*~
+
+# Certificate files (if any)
+*.pem
+*.key
+*.crt
+!ca.crt
+
+# Node modules (if using npm scripts)
+node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/

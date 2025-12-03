@@ -1,0 +1,47 @@
+meta {
+  name: Login (Userpass)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/v1/auth/userpass/login/{{username}}
+  body: json
+}
+
+body:json {
+  {
+    "password": "{{password}}"
+  }
+}
+
+docs {
+  # Login with Userpass
+
+  사용자명과 비밀번호로 로그인하여 토큰을 받습니다.
+
+  ## 사용 방법
+  1. 환경 변수에서 `username`과 `password` 설정
+  2. 요청 실행
+  3. 응답에서 받은 토큰이 자동으로 `token` 변수에 저장됨
+
+  ## 환경 변수
+  - `username`: 사용자명
+  - `password`: 비밀번호
+  - `token`: 자동으로 저장되는 인증 토큰
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const token = res.body.auth.client_token;
+    bru.setEnvVar('token', token);
+
+    console.log('✅ 로그인 성공');
+    console.log('Token:', token);
+    console.log('Token Policies:', res.body.auth.policies);
+    console.log('Lease Duration:', res.body.auth.lease_duration, 'seconds');
+  } else {
+    console.log('❌ 로그인 실패');
+    console.log('Error:', res.body.errors);
+  }
+}
