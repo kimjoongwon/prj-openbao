@@ -22,7 +22,8 @@ prj-openbao/
 │   └── scripts/
 │       ├── install-vault-cli.sh          # CLI 자동 설치
 │       ├── setup-esc.sh                  # 정책/토큰 자동 생성
-│       └── create-secrets.sh             # 시크릿 생성 헬퍼
+│       ├── create-secrets.sh             # 시크릿 생성 헬퍼
+│       └── revoke-non-root-tokens.sh     # 토큰 무효화 (Root 제외)
 ```
 
 ## 🚀 빠른 시작 (5분)
@@ -51,10 +52,17 @@ vault kv get secret/server/production
 vault kv get secret/harbor/staging
 ```
 
-### 4. 자세한 가이드
+### 4. 토큰 관리 (선택사항)
+```bash
+# Root 제외 모든 토큰 무효화
+./scripts/revoke-non-root-tokens.sh
+```
+
+### 5. 자세한 가이드
 - **CLI 설치**: [INSTALL-CLI.md](INSTALL-CLI.md)
 - **외부 접근**: [EXTERNAL-ACCESS-QUICKSTART.md](EXTERNAL-ACCESS-QUICKSTART.md)
 - **빠른 시작**: [QUICKSTART.md](QUICKSTART.md)
+- **토큰 무효화**: [TOKEN-REVOKE-QUICKSTART.md](TOKEN-REVOKE-QUICKSTART.md) ⭐ NEW
 - **전체 문서**: [INDEX.md](INDEX.md)
 
 ---
